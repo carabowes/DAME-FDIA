@@ -6,68 +6,86 @@ from src.attacks import stealth_FDIA, random_attack, standard_FDIA
 def run_time_series(
     net, #pandapower network
     T=200, # number of timesteps
-    load_noise_std=0.01, # std dev of load noise
+    p_noise_std=0.01, # standard deviation of active power (P) load noise
+    q_noise_std=0.0, # standard deviation of reactive power (Q) load noise (0 = disabled)
     meas_noise_std=0.04, # std dev of measurement noise
-    rng=None
-):
+    rng=None,
+    seed=42,
     
-    """
-    Generate a continuous time series of DC measurements.
-    Returns:
-        Z       : (T, m) measurement time series
-        X_true  : (T, n) true state (bus angle) time series
-    """
-
+):
     if rng is None:
-        rng = np.random.default_rng(42)
+        rng = np.random.default_rng(seed)
 
-    Z = [] 
+    Z = []  # measurement vectors
     X_true = [] # true states
+    converged = np.zeros(T, dtype=bool)  # tracks whether PF converged at each timestep
 
-    # Store base active power demand at each load bus
-    base_p = net.load.p_mw.values.copy()
+    # Store baseline load values
+    base_p = net.load.p_mw.values.copy() #base active power demand at each load bus
+    base_q = net.load.q_mvar.values.copy() if q_noise_std > 0 else None #base reactive power demand (only if enabled)
+
+    H = None
 
     for t in range(T):
-        # Disturb loads with random noise
-        noise = rng.normal(0.0, load_noise_std, size=len(base_p))
-        net.load.loc[:, "p_mw"] = base_p * (1 + noise)
+        # Load perturbation (drives time evolution)
+        p_noise = rng.normal(0.0, p_noise_std, size=len(base_p))
+        net.load.loc[:, "p_mw"] = base_p * (1 + p_noise) #apply noise 
 
-        # Run power flow
-        pp.runpp(
-            net,
-            algorithm="nr", 
-            init="dc", 
-            calculate_voltage_angles=True
-        )
+        if base_q is not None:
+            q_noise = rng.normal(0.0, q_noise_std, size=len(base_q))
+            net.load.loc[:, "q_mvar"] = base_q * (1 + q_noise) #apply noise
 
+        # Power flow
+        try:
+            pp.runpp(
+                net,
+                algorithm="nr", 
+                init="dc",
+                calculate_voltage_angles=True,
+            )
+            converged[t] = True #PF converged successfully
+        except Exception:
+            converged[t] = False
+
+            # Carry forward last valid state to preserve time-series continuity
+            if Z:
+                Z.append(Z[-1].copy())
+                X_true.append(X_true[-1].copy())
+                continue
+            else:
+                raise RuntimeError("Power flow failed at t=0.")
+            
         # Build DC model
-        H, x_true, z_true, _ = build_dc_measurement_model(net)
+        H, x_true, _, _ = build_dc_measurement_model(net)
 
         # Generate noisy measurements
-        z_no = simulate_measurements(H, x_true, meas_noise_std, rng)
+        z_noisy = simulate_measurements(H, x_true, meas_noise_std, rng)
 
         # Store results for this timestep
-        Z.append(z_no)
+        Z.append(z_noisy)
         X_true.append(x_true)
 
-    return np.array(Z), np.array(X_true)
+    return np.array(Z), np.array(X_true), converged, H
 
 def inject_fdi_time_series(
     Z,
     H,
-    attack_type="stealth",
+    attack_type="standard",
+    #attack_type="random",
+    #attack_type="stealth",
     attacked_indices=None,
-    alpha=0.05,
+    alpha=0.05, #stealth FDIA magnitude parameter
     start=50,
     end=150,
     rng=None,
     shift=0.1,
-    scale=0.05
+    scale=0.05,
+    seed =42,
 ):
     
     # Inject FDI attacks over a time window
     if rng is None:
-        rng = np.random.default_rng(42)
+        rng = np.random.default_rng(seed)
 
     T, m = Z.shape
     Z_att = Z.copy() # Copy original measurements
