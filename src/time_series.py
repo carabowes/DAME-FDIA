@@ -111,3 +111,4 @@ def inject_fdi_time_series(
             raise ValueError(f"Unknown attack_type: {attack_type}")
 
     return Z_att, attack_mask
+
