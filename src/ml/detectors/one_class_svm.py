@@ -2,47 +2,56 @@ from __future__ import annotations
 from typing import Optional
 
 import numpy as np
-from sklearn.ensemble import IsolationForest as SklearnIsolationForest
+from sklearn.svm import OneClassSVM
 from src.ml.detectors.base import BaseAnomalyDetector
 
-class IsolationForestDetector(BaseAnomalyDetector):
-    # Isolation Forest based anomaly detector operating on windowed feature vectors.
-
+class OneClassSVMDetector(BaseAnomalyDetector):
+    """
+    One-Class SVM based anomaly detector operating on windowed feature vectors. Trained on class windows only and produces
+    continuous anomaly scores and binary alarm decisions via quantile-based thresholding
+    """
     def __init__(
         self,
-        n_estimators: int = 100, # no of trees in IF
-        contamination: float = 0.05, # expected fraction of anomalies in the data
-        random_state: int = 42, # random seed for determination
-        threshold_quantile: float = 95.0, #percentile of anomaly scores used to define decision threshold tau
+        kernel: str = "rbf",
+        nu: float = 0.05,
+        gamma: str | float = "scale",
+        threshold_quantile: float = 95.0,
         **kwargs,
     ):
         super().__init__(
-        n_estimators=n_estimators,
-        contamination=contamination,
-        random_state=random_state,
-        threshold_quantile=threshold_quantile,
-        **kwargs,
+            kernel=kernel,
+            nu=nu,
+            gamma=gamma,
+            threshold_quantile=threshold_quantile,
+            **kwargs,
         )
-
-        self.model = SklearnIsolationForest(
-            n_estimators=n_estimators,
-            contamination="auto",
-            random_state=random_state,
+        self.model= OneClassSVM(
+            kernel=kernel,
+            nu=nu,
+            gamma=gamma,
         )
         self.threshold_quantile = threshold_quantile
         self._tau: Optional[float] = None
-    
+
     def fit(self, X: np.ndarray, clean_mask: Optional[np.ndarray] = None) -> None:
-        # Fit IF on windowed feature matrix 
+
+        # Fit one-class SVM on windowed feature matrix. If a clean_mask is provided, only windows marked as clean (mask ==1) are used for training.
+        if X.ndim != 2:
+            raise ValueError("X must be a 2D array")
+        
         if clean_mask is not None:
             X_fit = X[clean_mask==1]
         else:
             X_fit = X
         
+        if X_fit.shape[0] ==0:
+            raise ValueError("No clean samples available for training One-class SVM")
+        
         self.model.fit(X_fit)
 
+        # Compute anomaly scores on training data to set threshold
         scores = self.score(X_fit)
-        self._tau = np.percentile(scores, self.threshold_quantile) #self.threshold(train_scores)
+        self._tau = np.percentile(scores, self.threshold_quantile)
         self._is_fitted = True
 
         # print(
@@ -51,7 +60,6 @@ class IsolationForestDetector(BaseAnomalyDetector):
         #     "num_clean =", None if clean_mask is None else int(clean_mask.sum()),
         #     "num_windows =", X.shape[0],
         # )
-
 
     def score(self, X: np.ndarray) -> np.ndarray:
         # compute continuous anomaly scores, higher values - more anomalous
