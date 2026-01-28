@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import numpy as np
 from dataclasses import dataclass
-from typing import Any, Dict, Literal, Optional
+from typing import Any, Dict, Literal, Optional, Tuple
 
 from src.pipeline.time_series import run_time_series, inject_fdi_time_series
 from src.pipeline.state_estimation import run_wls_time_series
@@ -18,15 +18,20 @@ given fixed configuration and random seed.
 """
 
 ScenarioType = Literal["standard", "random", "stealth"]
+Episode = Tuple[int, int]
 
 @dataclass(frozen=True)
 class ScenarioConfig:
-    # Configuartion for a single scenario. Attacks are injected over a time window [start, end)
+    # Configuartion for a single scenario. Legacy Attacks are injected over a time window [start, end).
+    # New: episodes to allow multiple intervals
 
     attack_type: ScenarioType = "standard"
     attacked_indices: Optional[np.ndarray] = None
     start: int = 50
     end: int = 150
+
+    # New schedule
+    episodes: Optional[np.ndarray] = None
 
     # standard FDIA
     shift: float = 0.1
@@ -94,7 +99,7 @@ def run_pipeline(
     rng=rng,
     seed=config.seed,
     )
-
+    print("DEBUG scenario.episodes:", scenario.episodes)
     # 2. FDIA Injection
     Z_attacked, attack_mask = inject_fdi_time_series(
         Z=Z_clean,
@@ -104,6 +109,7 @@ def run_pipeline(
         alpha=scenario.alpha,
         start=scenario.start,
         end=scenario.end,
+        episodes=scenario.episodes,
         rng=rng,
         shift=scenario.shift,
         scale=scenario.scale,
@@ -119,6 +125,11 @@ def run_pipeline(
     # 4. Outputs
     time = np.arange(Z_clean.shape[0], dtype=int)
 
+    # Episodes
+    # canonical episodes stored for auditability
+    episodes = scenario.episodes if scenario.episodes is not None else [(scenario.start, scenario.end)]
+
+
     metadata: Dict[str, Any] = {
         "network": config.network,
         "seed": config.seed,
@@ -130,6 +141,7 @@ def run_pipeline(
         "attack_type": scenario.attack_type,
         "attack_start": int(scenario.start),
         "attack_end": int(scenario.end),
+        "attack_episodes": [(int(s), int(e)) for (s, e) in episodes],
         "attack_shift": float(scenario.shift),
         "attack_scale": float(scenario.scale),
         "attack_alpha": float(scenario.alpha),

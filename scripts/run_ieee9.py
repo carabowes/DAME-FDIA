@@ -25,7 +25,39 @@ def parse_args():
     parser.add_argument("--attack_start", type=int, default=50)
     parser.add_argument("--attack_end", type=int, default=150)
 
+    parser.add_argument(
+    "--episodes",
+    type=str,
+    default=None,
+    help=(
+        "Optional attack episodes as a string, e.g. "
+        "'50:150' or '50:150,300:360'. "
+        "If provided, overrides --attack_start/--attack_end."
+        ),
+    )
+
     return parser.parse_args()
+
+def parse_episodes(episodes_str: str | None):
+    """
+    Parse episodes from a string like:
+      '50:150' or '50:150,300:360'
+    into [(50,150), (300,360)]
+    """
+    if episodes_str is None:
+        return None
+
+    episodes = []
+    for block in episodes_str.split(","):
+        try:
+            s, e = block.split(":")
+            episodes.append((int(s), int(e)))
+        except ValueError:
+            raise ValueError(
+                f"Invalid episode specification '{block}'. "
+                "Expected format 'start:end'."
+            )
+    return episodes
 
 def main():
     args = parse_args()
@@ -40,10 +72,18 @@ def main():
         T=args.T,
     )
 
+    # scenario_config = ScenarioConfig(
+    #     attack_type=args.scenario,
+    #     start=args.attack_start,
+    #     end=args.attack_end,
+    # )
+    episodes = parse_episodes(args.episodes)
+
     scenario_config = ScenarioConfig(
         attack_type=args.scenario,
         start=args.attack_start,
         end=args.attack_end,
+        episodes=episodes,
     )
     
     # Run pipeline
@@ -69,6 +109,7 @@ def main():
     print(f"Seed            : {pipeline_config.seed}")
     print(f"Timesteps (T)   : {pipeline_config.T}")
     print(f"Attack window   : [{scenario_config.start}, {scenario_config.end})")
+    print(f"Episodes        : {scenario_config.episodes})")
     print(f"Measurements   : {outputs.Z_clean.shape[1]}")
     print(f"State dim       : {outputs.X_hat.shape[1]}")
     print(f"Attacked steps  : {int(outputs.attack_mask.sum())}")

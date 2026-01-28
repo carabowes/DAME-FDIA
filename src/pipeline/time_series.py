@@ -1,3 +1,4 @@
+from typing import List, Optional, Sequence, Tuple
 import numpy as np
 import pandapower as pp
 from src.pipeline.simulation import build_dc_measurement_model, simulate_measurements
@@ -67,20 +68,68 @@ def run_time_series(
 
     return np.array(Z), np.array(X_true), converged, H
 
+# Episode Helpers
+Episode = Tuple[int, int]
+
+def normalise_episodes(
+    T: int,
+    episodes: Optional[Sequence[Episode]],
+    start: int,
+    end: int,
+) -> List[Episode]:
+    
+    # Return episode list
+    # If episodes is provided use it, else fall back to legacy start/end
+    if episodes is not None:
+        episodes_list: List[Episode] = [(int(start), int(end))]
+    else:
+        episodes_list = [(int(s), int(e)) for (s, e) in episodes]
+    
+    # Validate basic bounds
+    for (s, e) in episodes_list:
+        if s < 0 or e < 0:
+            raise ValueError(f"Episode has negative bounds: {(s, e)}")
+        if s > e:
+            raise ValueError(f"Episode start > end: {(s, e)}")
+        if s > T:
+            raise ValueError(f"Episode start {s} beyond T={T}")
+        # allow e == T (end exclusive)
+        if e > T:
+            raise ValueError(f"Episode end {e} beyond T={T}")
+
+    # Sort for determinism (important for reproducible RNG consumption order later)
+    episodes_list.sort(key=lambda x: x[0])
+    return episodes_list
+
+def episodes_to_attack_mask(T: int, episodes: Sequence[Episode]) -> np.ndarray:
+    # Convert episodes [(s,e), ...] into a binary attack_mask of length T.
+    
+    mask = np.zeros(T, dtype=int)
+    for (s, e) in episodes:
+        if e <= s:
+            continue
+        mask[s:e] = 1
+    return mask
+
+def iter_attack_timesteps(attack_mask: np.ndarray) -> np.ndarray:
+    #Return sorted timesteps where attack is active. Using np.nonzero preserves increasing order.
+    return np.nonzero(attack_mask)[0]
+
 def inject_fdi_time_series(
     Z,
     H,
-    attack_type="standard",
+    attack_type: str ="standard",
     #attack_type="random",
     #attack_type="stealth",
-    attacked_indices=None,
-    alpha=0.05, #stealth FDIA magnitude parameter
-    start=50,
-    end=150,
-    rng=None,
-    shift=0.1,
-    scale=0.05,
-    seed =42,
+    attacked_indices = None,
+    alpha= 0.05, #stealth FDIA magnitude parameter
+    start= 50,
+    end = 150,
+    episodes = None,
+    rng = None,
+    shift = 0.1,
+    scale = 0.05,
+    seed = 42,
 ):
     
     # Inject FDI attacks over a time window
@@ -94,21 +143,49 @@ def inject_fdi_time_series(
     if attacked_indices is None:
         attacked_indices = np.arange(m)
 
-    # Inject attacks only within specified time window
-    for t in range(start, end):
-        attack_mask[t] = 1
+    # Episodes + attack mask
+    # episodes_list = normalise_episodes(T=T, episodes=episodes, start=start, end=end)
+    # attack_mask = episodes_to_attack_mask(T=T, episodes=episodes_list)
 
-        if attack_type == "standard":
-            Z_att[t] = standard_FDIA(Z_att[t], attacked_indices, shift)
+    # Apply attacks on active timesteps in increasing order (preserves RNG call order)
+    # for t in range(start, end):
+    # for t in iter_attack_timesteps(attack_mask):
+    #     attack_mask[t] = 1
 
-        elif attack_type == "random":
-            Z_att[t] = random_attack(Z_att[t], attacked_indices, rng, scale)
+    #     if attack_type == "standard":
+    #         Z_att[t] = standard_FDIA(Z_att[t], attacked_indices, shift)
 
-        elif attack_type == "stealth":
-            a = stealth_FDIA(H, attacked_indices, alpha, rng)
-            Z_att[t] += a
-        else:
-            raise ValueError(f"Unknown attack_type: {attack_type}")
+    #     elif attack_type == "random":
+    #         Z_att[t] = random_attack(Z_att[t], attacked_indices, rng, scale)
 
+    #     elif attack_type == "stealth":
+    #         a = stealth_FDIA(H, attacked_indices, alpha, rng)
+    #         Z_att[t] += a
+    #     else:
+    #         raise ValueError(f"Unknown attack_type: {attack_type}")
+
+    # return Z_att, attack_mask
+
+    # Determine attack schedule
+    if episodes is None:
+        episodes = [(start, end)]
+
+    for (s, e) in episodes:
+        if s < 0 or e > T or s >= e:
+            raise ValueError(f"Invalid attack episode ({s}, {e})")
+
+        for t in range(s, e):
+            attack_mask[t] = 1
+
+            if attack_type == "standard":
+                Z_att[t] = standard_FDIA(Z_att[t], attacked_indices, shift)
+
+            elif attack_type == "random":
+                Z_att[t] = random_attack(Z_att[t], attacked_indices, rng, scale)
+
+            elif attack_type == "stealth":
+                a = stealth_FDIA(H, attacked_indices, alpha, rng)
+                Z_att[t] += a
+            else:
+                raise ValueError(f"Unknown attack_type: {attack_type}")
     return Z_att, attack_mask
-
