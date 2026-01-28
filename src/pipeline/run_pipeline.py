@@ -27,19 +27,24 @@ class ScenarioConfig:
 
     attack_type: ScenarioType = "standard"
     attacked_indices: Optional[np.ndarray] = None
+
+    # Legacy fixed window
     start: int = 50
     end: int = 150
 
     # New schedule
-    episodes: Optional[np.ndarray] = None
+    episodes: Optional[list[tuple[int, int]]] = None
+    episode_seed: Optional[int] = None
 
-    # standard FDIA
+    # # standard FDIA
     shift: float = 0.1
-    # random FDIA
+    # # random FDIA
     scale: float = 0.05
-    # stealth FDIA
+    # # stealth FDIA
     alpha: float = 0.05
-
+    random_strength: bool = False
+    strength_min: float = 0.5
+    strength_max: float = 1.5
 @dataclass(frozen=True)
 class PipelineConfig:
     network: Literal["ieee9"] = "ieee9"
@@ -99,9 +104,9 @@ def run_pipeline(
     rng=rng,
     seed=config.seed,
     )
-    print("DEBUG scenario.episodes:", scenario.episodes)
+
     # 2. FDIA Injection
-    Z_attacked, attack_mask = inject_fdi_time_series(
+    Z_attacked, attack_mask, episode_log = inject_fdi_time_series(
         Z=Z_clean,
         H=H,
         attack_type=scenario.attack_type,
@@ -114,6 +119,10 @@ def run_pipeline(
         shift=scenario.shift,
         scale=scenario.scale,
         seed=config.seed,
+        random_strength=scenario.random_strength,
+        strength_min=scenario.strength_min,
+        strength_max=scenario.strength_max,
+
     )
     # 3. State Estimation + residual signal (norms)
     residual_norms, X_hat = run_wls_time_series(
@@ -127,8 +136,7 @@ def run_pipeline(
 
     # Episodes
     # canonical episodes stored for auditability
-    episodes = scenario.episodes if scenario.episodes is not None else [(scenario.start, scenario.end)]
-
+    episodes = (scenario.episodes if scenario.episodes is not None else [(scenario.start, scenario.end)])
 
     metadata: Dict[str, Any] = {
         "network": config.network,
@@ -141,7 +149,15 @@ def run_pipeline(
         "attack_type": scenario.attack_type,
         "attack_start": int(scenario.start),
         "attack_end": int(scenario.end),
-        "attack_episodes": [(int(s), int(e)) for (s, e) in episodes],
+        "episode_seed": (None if scenario.episode_seed is None else int(scenario.episode_seed)),
+        # "attack_episodes": [{
+        #     "start": int(s),
+        #     "end": int(e),
+        #     # Optional per-episode params (safe defaults for now)
+        #     "alpha": float(scenario.alpha),
+        #     "shift": float(scenario.shift),
+        #     "scale": float(scenario.scale),
+        # } for (s, e) in episodes],
         "attack_shift": float(scenario.shift),
         "attack_scale": float(scenario.scale),
         "attack_alpha": float(scenario.alpha),
@@ -156,7 +172,10 @@ def run_pipeline(
             "converged": list(converged.shape),
             "residual_norms": list(residual_norms.shape),
         },
+        
     }
+    metadata["attack_episodes"] = episode_log
+
     return PipelineOutputs(
         time=time,
         Z_clean=Z_clean,

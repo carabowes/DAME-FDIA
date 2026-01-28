@@ -3,8 +3,10 @@ from __future__ import annotations
 import pandapower.networks as pn
 import argparse
 from src.pipeline.run_pipeline import (run_pipeline, PipelineConfig, ScenarioConfig )
-
+from src.pipeline.attack_schedule import generate_random_attack
+import numpy as np
 from pathlib import Path
+import secrets
 from src.io.export_pipeline_run import export_pipeline_run
 
 def build_ieee9_network():
@@ -35,6 +37,25 @@ def parse_args():
         "If provided, overrides --attack_start/--attack_end."
         ),
     )
+    parser.add_argument(
+    "--episode_seed",
+    type=int,
+    default=None,
+    help="Seed for attack episode generation. If omitted, a random seed is used and logged.",
+)
+
+    parser.add_argument("--random_episodes", action="store_true")
+    parser.add_argument("--p_start", type=float, default=0.01)
+    parser.add_argument("--duration_min", type=int, default=50)
+    parser.add_argument("--duration_max", type=int, default=150)
+    parser.add_argument("--cooldown", type=int, default=50)
+    parser.add_argument("--no_attack_before", type=int, default=0)
+
+    # Attack indice parsers
+    parser.add_argument("--random_strength", action="store_true")
+    parser.add_argument("--strength_min", type=float, default=0.5)
+    parser.add_argument("--strength_max", type=float, default=1.5)
+
 
     return parser.parse_args()
 
@@ -71,19 +92,46 @@ def main():
         seed=args.seed,
         T=args.T,
     )
+    # Resolve episode seed
+    if args.episode_seed is None:
+        episode_seed = secrets.randbits(32)
+        print(f"[INFO] No episode_seed provided. Generated random episode_seed = {episode_seed}")
+    else:
+        episode_seed = args.episode_seed
+        print(f"[INFO] Using provided episode_seed = {episode_seed}")
 
+    episode_rng = np.random.default_rng(episode_seed)
     # scenario_config = ScenarioConfig(
     #     attack_type=args.scenario,
     #     start=args.attack_start,
     #     end=args.attack_end,
     # )
-    episodes = parse_episodes(args.episodes)
+    # episodes = parse_episodes(args.episodes)
+    episodes = None
+    if args.random_episodes:
+        rng = np.random.default_rng(args.seed)
+
+        episodes = generate_random_attack(
+            T=args.T,
+            rng=episode_rng,
+            p_start=args.p_start,
+            duration_min=args.duration_min,
+            duration_max=args.duration_max,
+            cooldown=args.cooldown,
+            no_attack_before=args.no_attack_before,
+        )
+
+        print("Generated attack episodes:", episodes)
 
     scenario_config = ScenarioConfig(
         attack_type=args.scenario,
         start=args.attack_start,
         end=args.attack_end,
         episodes=episodes,
+        episode_seed=episode_seed,
+        random_strength=args.random_strength,
+        strength_min=args.strength_min,
+        strength_max=args.strength_max,
     )
     
     # Run pipeline
@@ -108,8 +156,8 @@ def main():
     print(f"Scenario        : {scenario_config.attack_type}")
     print(f"Seed            : {pipeline_config.seed}")
     print(f"Timesteps (T)   : {pipeline_config.T}")
-    print(f"Attack window   : [{scenario_config.start}, {scenario_config.end})")
     print(f"Episodes        : {scenario_config.episodes})")
+    print(f"Episode seed    : {episode_seed}")
     print(f"Measurements   : {outputs.Z_clean.shape[1]}")
     print(f"State dim       : {outputs.X_hat.shape[1]}")
     print(f"Attacked steps  : {int(outputs.attack_mask.sum())}")

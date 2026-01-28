@@ -80,30 +80,48 @@ def normalise_episodes(
     
     # Return episode list
     # If episodes is provided use it, else fall back to legacy start/end
-    if episodes is not None:
+    if episodes is None:
         episodes_list: List[Episode] = [(int(start), int(end))]
     else:
         episodes_list = [(int(s), int(e)) for (s, e) in episodes]
-    
-    # Validate basic bounds
+
+    cleaned: List[Episode] = []
     for (s, e) in episodes_list:
         if s < 0 or e < 0:
             raise ValueError(f"Episode has negative bounds: {(s, e)}")
-        if s > e:
-            raise ValueError(f"Episode start > end: {(s, e)}")
-        if s > T:
-            raise ValueError(f"Episode start {s} beyond T={T}")
-        # allow e == T (end exclusive)
-        if e > T:
-            raise ValueError(f"Episode end {e} beyond T={T}")
+        if s >= e:
+            raise ValueError(f"Episode start >= end: {(s, e)}")
+        if s >= T:
+            continue
+        e = min(e, T)
+        cleaned.append((s, e))
 
-    # Sort for determinism (important for reproducible RNG consumption order later)
-    episodes_list.sort(key=lambda x: x[0])
-    return episodes_list
+    cleaned.sort(key=lambda x: x[0])
+    return cleaned
+    # if episodes is not None:
+    #     episodes_list: List[Episode] = [(int(start), int(end))]
+    # else:
+    #     episodes_list = [(int(s), int(e)) for (s, e) in episodes]
+    
+    # cleaned: List[Episode] = []
+    # # Validate basic bounds
+    # for (s, e) in episodes_list:
+    #     if s < 0 or e < 0:
+    #         raise ValueError(f"Episode has negative bounds: {(s, e)}")
+    #     if s >= e:
+    #         raise ValueError(f"Episode start >= end: {(s, e)}")
+    #     if s >= T:
+    #         continue  # starts beyond horizon -> ignore
+    #     e = min(e, T)  # allow e > T but clamp
+    # #     cleaned.append((s, e))
+
+    # # Sort for determinism (important for reproducible RNG consumption order later)
+    # cleaned.sort(key=lambda x: x[0])
+    # return cleaned
 
 def episodes_to_attack_mask(T: int, episodes: Sequence[Episode]) -> np.ndarray:
     # Convert episodes [(s,e), ...] into a binary attack_mask of length T.
-    
+
     mask = np.zeros(T, dtype=int)
     for (s, e) in episodes:
         if e <= s:
@@ -130,6 +148,9 @@ def inject_fdi_time_series(
     shift = 0.1,
     scale = 0.05,
     seed = 42,
+    random_strength: bool = False,
+    strength_min = 0.5,
+    strength_max = 1.5,
 ):
     
     # Inject FDI attacks over a time window
@@ -143,49 +164,78 @@ def inject_fdi_time_series(
     if attacked_indices is None:
         attacked_indices = np.arange(m)
 
-    # Episodes + attack mask
-    # episodes_list = normalise_episodes(T=T, episodes=episodes, start=start, end=end)
-    # attack_mask = episodes_to_attack_mask(T=T, episodes=episodes_list)
+     # Resolve schedule
+    episodes_list = normalise_episodes(T=T, episodes=episodes, start=start, end=end)
+    attack_mask = episodes_to_attack_mask(T=T, episodes=episodes_list)
+    episode_log = []
+    
+    # # Validate strength jitter settings
+    # if random_strength:
+    #     if strength_min <= 0 or strength_max <= 0 or strength_min > strength_max:
+    #         raise ValueError("Invalid strength_min/strength_max for random_strength.")
 
-    # Apply attacks on active timesteps in increasing order (preserves RNG call order)
-    # for t in range(start, end):
-    # for t in iter_attack_timesteps(attack_mask):
-    #     attack_mask[t] = 1
+    # if episodes is None:
+    #     episodes = [(start, end)]
 
-    #     if attack_type == "standard":
-    #         Z_att[t] = standard_FDIA(Z_att[t], attacked_indices, shift)
 
-    #     elif attack_type == "random":
-    #         Z_att[t] = random_attack(Z_att[t], attacked_indices, rng, scale)
+     # Apply per-episode (not per-timestep) parameter jitter
+    for (s, e) in episodes_list:
+        if random_strength:
+            factor_alpha = float(rng.uniform(strength_min, strength_max))
+            factor_shift = float(rng.uniform(strength_min, strength_max))
+            factor_scale = float(rng.uniform(strength_min, strength_max))
+        else:
+            factor_alpha = 1.0
+            factor_shift = 1.0
+            factor_scale = 1.0
 
-    #     elif attack_type == "stealth":
-    #         a = stealth_FDIA(H, attacked_indices, alpha, rng)
-    #         Z_att[t] += a
-    #     else:
-    #         raise ValueError(f"Unknown attack_type: {attack_type}")
+        alpha_ep = alpha * factor_alpha
+        shift_ep = shift * factor_shift
+        scale_ep = scale * factor_scale
 
-    # return Z_att, attack_mask
-
-    # Determine attack schedule
-    if episodes is None:
-        episodes = [(start, end)]
-
-    for (s, e) in episodes:
-        if s < 0 or e > T or s >= e:
-            raise ValueError(f"Invalid attack episode ({s}, {e})")
+        episode_log.append({
+            "start": int(s),
+            "end": int(e),
+            "alpha": float(alpha_ep),
+            "shift": float(shift_ep),
+            "scale": float(scale_ep),
+        })
 
         for t in range(s, e):
-            attack_mask[t] = 1
-
             if attack_type == "standard":
-                Z_att[t] = standard_FDIA(Z_att[t], attacked_indices, shift)
+                Z_att[t] = standard_FDIA(Z_att[t], attacked_indices, shift_ep)
 
             elif attack_type == "random":
-                Z_att[t] = random_attack(Z_att[t], attacked_indices, rng, scale)
+                Z_att[t] = random_attack(Z_att[t], attacked_indices, rng, scale_ep)
 
             elif attack_type == "stealth":
-                a = stealth_FDIA(H, attacked_indices, alpha, rng)
+                a = stealth_FDIA(H, attacked_indices, alpha_ep, rng)
                 Z_att[t] += a
+
             else:
                 raise ValueError(f"Unknown attack_type: {attack_type}")
-    return Z_att, attack_mask
+
+    return Z_att, attack_mask, episode_log
+    # for (s, e) in episodes:
+    #     if s < 0 or e > T or s >= e:
+    #         raise ValueError(f"Invalid attack episode ({s}, {e})")
+    #     # Draw episode-specific parameters
+    #     alpha_ep = alpha * rng.uniform(0.5, 1.5)
+    #     shift_ep = shift * rng.uniform(0.5, 1.5)
+    #     scale_ep = scale * rng.uniform(0.5, 1.5)
+        
+    #     for t in range(s, e):
+    #         attack_mask[t] = 1
+
+    #         if attack_type == "standard":
+    #             Z_att[t] = standard_FDIA(Z_att[t], attacked_indices, shift_ep)
+
+    #         elif attack_type == "random":
+    #             Z_att[t] = random_attack(Z_att[t], attacked_indices, rng, scale_ep)
+
+    #         elif attack_type == "stealth":
+    #             a = stealth_FDIA(H, attacked_indices, alpha_ep, rng)
+    #             Z_att[t] += a
+    #         else:
+    #             raise ValueError(f"Unknown attack_type: {attack_type}")
+    # return Z_att, attack_mask
