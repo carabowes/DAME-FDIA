@@ -14,9 +14,17 @@ __pycache__/
 # Generated runs
 runs/
 runs_live/
-trained_detectors/
-trained_detectors_streaming/
-trained_detectors_streaming_percent/
+trained_detectors*/
+trained_detectors_streaming*/
+plots/
+
+# Generated plots and images
+*.png
+*.jpg
+*.pdf
+
+# Archive/experiment notebooks
+archive_notebooks/
 
 
 # Distribution / packaging
