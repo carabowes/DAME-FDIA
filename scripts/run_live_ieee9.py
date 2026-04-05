@@ -90,13 +90,6 @@ def parse_args():
 
 
     parser.add_argument("--attack_strength", type=float, default=0.1, help="Stealth attack magnitude as fraction of measurement (e.g. 0.10 = 10%)")
-    # parser.add_argument("--stealth_max_abs", type=float, default=0.02)
-    # parser.add_argument("--stealth_jitter_std", type=float, default=0.002)
-    # parser.add_argument(
-    #     "--enable_mitigation",
-    #     action="store_true",
-    #     help="Enable measurement replacement mitigation on alarm",
-    # )      
 
     parser.add_argument("--enable_mitigation", action="store_true")
     parser.add_argument("--mitigation_mode", type=str, default="freeze", choices=["freeze"])
@@ -136,27 +129,10 @@ def main():
     net = build_ieee9_network()
     
     pp.runpp(net, algorithm="nr", init="dc", calculate_voltage_angles=True)
-    
-    # if args.enable_control:
-    #     ramp_limits = {int(i): 10.0 for i in net.gen.index}
-
-    #     control_bus = args.attack_buses[0] if args.attack_buses else None
-
-    #     controller = OPFController(
-    #         ramp_limits=ramp_limits,
-    #         attack_bus=control_bus,
-    #         gain=20.0,
-    #     )
-
-    #     print(
-    #         f"[LIVE] Control enabled (ramp_limits={ramp_limits}, "
-    #         f"attack_buses={args.attack_buses}, gain=20.0)"
-    #     )
 
     if args.enable_control:
-        ramp_limits = {int(i): 10.0 for i in net.gen.index}
-
-        # IMPORTANT: create realistic min/max bounds if missing
+        ramp_limits = {int(i): 2.0 for i in net.gen.index}
+        
         ensure_gen_limits(net, default_headroom_mw=50.0)
 
         control_bus = args.attack_buses[0] if args.attack_buses else None
@@ -164,7 +140,7 @@ def main():
         controller = OPFController(
             ramp_limits=ramp_limits,
             attack_bus=control_bus,
-            gain=10.0,
+            gain=5.0,
             signal_clip=0.5,   # stops insane spikes
         )
 
@@ -174,7 +150,7 @@ def main():
         )
 
 
-    # ---- Load streaming-trained detector ----
+    # Load streaming-trained detector
     if args.detector_type != "none":
         detector_path = {
             "isolation_forest": f"{args.detector_dir}/iforest_ieee9_W{args.window_size}_{args.representation}.pkl",
@@ -200,7 +176,7 @@ def main():
             scaler = pickle.load(f)
 
 
-    # ---------------- ATTACK BUS SELECTION (STEALTH ONLY) ----------------
+    # ATTACK BUS SELECTION (STEALTH ONLY)
     if args.scenario == "stealth":
 
         if args.attack_buses is not None:
@@ -225,7 +201,6 @@ def main():
         end=args.attack_end,
         episodes=None,
         episode_seed=None,
-        # attacked_indices=attacked_indices,
         attack_buses=attack_buses if args.scenario == "stealth" else None,
 
     )
@@ -254,13 +229,10 @@ def main():
         attack_envelope=args.attack_envelope,
         enable_mitigation=args.enable_mitigation,
         mitigation_mode=args.mitigation_mode,
-        # calibration_steps=args.calibration_steps,
         enable_recovery=args.enable_recovery,
     )
 
     print(f"[LIVE DONE] wrote: {run_dir}")
-    # print(net.gen)
-    # print(net.ext_grid)
 
 
 if __name__ == "__main__":

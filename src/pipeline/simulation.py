@@ -44,12 +44,9 @@ def build_dc_measurement_model(net):
     z_true_list = []
     line_row_count = 0
     inj_row_count = 0
-    # -----------------------
+
     # Line flow measurements
-    # -----------------------
-# -----------------------
-# Line flow measurements
-# -----------------------
+
     for _, line in net.line.iterrows():
 
         i = int(line.from_bus)
@@ -76,10 +73,7 @@ def build_dc_measurement_model(net):
 
         z_true_list.append((theta_i - theta_j) / x)
 
-
-    # -----------------------
     # Bus injection measurements
-    # -----------------------
     for bus in non_slack_buses:
 
         row = np.zeros(n)
@@ -131,11 +125,6 @@ def build_dc_measurement_model(net):
 
     H = np.vstack(rows)
     z_true = np.array(z_true_list)
-    # print("num lines in net.line:", len(net.line))
-    # print("non_slack_buses:", non_slack_buses)
-    # print("line rows added:", line_row_count)
-    # print("injection rows added:", inj_row_count)
-    # print("total rows added:", len(rows))
 
     return H, x_true, z_true, mask
 
@@ -147,8 +136,4 @@ def simulate_measurements(H, x_true, sigma, rng):
     m = H.shape[0]
     noise = rng.normal(loc=0.0, scale=sigma, size=m)
     z = H @ x_true + noise
-    # print("H shape:", H.shape)
-    # print("max |H|:", np.max(np.abs(H)))
-    # print("min nonzero |H|:", np.min(np.abs(H[np.nonzero(H)])))
-
     return z

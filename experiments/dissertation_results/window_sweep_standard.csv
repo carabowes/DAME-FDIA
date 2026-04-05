@@ -1,0 +1,21 @@
+run_dir,feature,window_size,seed,scenario,detector
+runs_live/ieee9/standard/run_20260326_202707,residuals,5,42,standard,ocsvm
+runs_live/ieee9/standard/run_20260326_204240,residuals,10,42,standard,ocsvm
+runs_live/ieee9/standard/run_20260326_204322,residuals,15,42,standard,ocsvm
+runs_live/ieee9/standard/run_20260326_204336,residuals,20,42,standard,ocsvm
+runs_live/ieee9/standard/run_20260326_204348,residuals,25,42,standard,ocsvm
+runs_live/ieee9/standard/run_20260326_204406,residuals,30,42,standard,ocsvm
+
+runs_live/ieee9/standard/run_20260326_204435,prediction error,5,42,standard,ocsvm
+runs_live/ieee9/standard/run_20260326_204453,prediction error,10,42,standard,ocsvm
+runs_live/ieee9/standard/run_20260326_204506,prediction error,15,42,standard,ocsvm
+runs_live/ieee9/standard/run_20260326_204520,prediction error,20,42,standard,ocsvm
+runs_live/ieee9/standard/run_20260326_204538,prediction error,25,42,standard,ocsvm
+runs_live/ieee9/standard/run_20260326_204555,prediction error,30,42,standard,ocsvm
+
+runs_live/ieee9/standard/run_20260326_204736,state,5,42,standard,ocsvm
+runs_live/ieee9/standard/run_20260326_204749,state,10,42,standard,ocsvm
+runs_live/ieee9/standard/run_20260326_204804,state,15,42,standard,ocsvm
+runs_live/ieee9/standard/run_20260326_204817,state,20,42,standard,ocsvm
+runs_live/ieee9/standard/run_20260326_204832,state,25,42,standard,ocsvm
+runs_live/ieee9/standard/run_20260326_204843,state,30,42,standard,ocsvm

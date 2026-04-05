@@ -45,14 +45,6 @@ class IsolationForestDetector(BaseAnomalyDetector):
         self._tau = np.percentile(scores, self.threshold_quantile) #self.threshold(train_scores)
         self._is_fitted = True
 
-        # print(
-        #     "DEBUG:",
-        #     "clean_mask provided =", clean_mask is not None,
-        #     "num_clean =", None if clean_mask is None else int(clean_mask.sum()),
-        #     "num_windows =", X.shape[0],
-        # )
-
-
     def score(self, X: np.ndarray) -> np.ndarray:
         # compute continuous anomaly scores, higher values - more anomalous
         if X.ndim != 2:

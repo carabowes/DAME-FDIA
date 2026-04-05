@@ -152,14 +152,6 @@ def run_pipeline(
         "attack_start": int(scenario.start),
         "attack_end": int(scenario.end),
         "episode_seed": (None if scenario.episode_seed is None else int(scenario.episode_seed)),
-        # "attack_episodes": [{
-        #     "start": int(s),
-        #     "end": int(e),
-        #     # Optional per-episode params (safe defaults for now)
-        #     "alpha": float(scenario.alpha),
-        #     "shift": float(scenario.shift),
-        #     "scale": float(scenario.scale),
-        # } for (s, e) in episodes],
         "attack_shift": float(scenario.shift),
         "attack_scale": float(scenario.scale),
         "attack_alpha": float(scenario.alpha),

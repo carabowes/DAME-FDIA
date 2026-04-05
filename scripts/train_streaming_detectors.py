@@ -76,12 +76,6 @@ def main():
     args = p.parse_args()
     rep = args.representation
 
-    # feat_path = args.run_dir / "features.jsonl"
-    # if not feat_path.exists():
-    #     raise FileNotFoundError(feat_path)
-
-    # _, F = load_features_jsonl(feat_path)
-    # X = make_windows(F, args.window_size)
     all_windows = []
 
     for run_dir in args.run_dir:
@@ -108,7 +102,7 @@ def main():
 
     clean_mask = np.ones(Xs.shape[0], dtype=int)
 
-    # ---------------- OCSVM ----------------
+    # OCSVM
     ocsvm = OneClassSVMDetector(
         nu=args.ocsvm_nu,
         gamma=args.ocsvm_gamma,
@@ -121,7 +115,7 @@ def main():
         args.out_dir / f"ocsvm_ieee9_W{args.window_size}_{rep}.pkl",
     )
 
-    # ---------------- LOF ----------------
+    # LOF
     lof = LOFDetector(
         n_neighbors=args.lof_n_neighbors,
         contamination=args.lof_contamination,
@@ -134,7 +128,7 @@ def main():
         args.out_dir / f"lof_ieee9_W{args.window_size}_{rep}.pkl",
     )
 
-    # ---------------- Isolation Forest ----------------
+    # Isolation Forest
     iforest = IsolationForestDetector(
         n_estimators=args.iforest_n_estimators,
         contamination=args.iforest_contamination,

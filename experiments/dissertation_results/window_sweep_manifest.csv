@@ -1,0 +1,20 @@
+run_dir,feature,window_size,seed,scenario,detector
+runs_live/ieee9/stealth/run_20260326_193328,state,5,42,stealth,ocsvm
+runs_live/ieee9/stealth/run_20260326_193757,state,10,42,stealth,ocsvm
+runs_live/ieee9/stealth/run_20260326_192916,state,15,42,stealth,ocsvm
+runs_live/ieee9/stealth/run_20260326_192942,state,20,42,stealth,ocsvm
+runs_live/ieee9/stealth/run_20260326_192952,state,25,42,stealth,ocsvm
+runs_live/ieee9/stealth/run_20260326_184117,state,30,42,stealth,ocsvm
+runs_live/ieee9/stealth/run_20260326_194341,residuals,5,42,stealth,ocsvm
+runs_live/ieee9/stealth/run_20260326_194702,residuals,10,42,stealth,ocsvm
+runs_live/ieee9/stealth/run_20260326_194722,residuals,15,42,stealth,ocsvm
+runs_live/ieee9/stealth/run_20260326_194920,residuals,20,42,stealth,ocsvm
+runs_live/ieee9/stealth/run_20260326_195107,residuals,25,42,stealth,ocsvm
+runs_live/ieee9/stealth/run_20260326_194825,residuals,30,42,stealth,ocsvm
+runs_live/ieee9/stealth/run_20260326_195153,prediction error,5,42,stealth,ocsvm
+runs_live/ieee9/stealth/run_20260326_195207,prediction error,10,42,stealth,ocsvm
+runs_live/ieee9/stealth/run_20260326_195223,prediction error,15,42,stealth,ocsvm
+runs_live/ieee9/stealth/run_20260326_195248,prediction error,20,42,stealth,ocsvm
+runs_live/ieee9/stealth/run_20260326_195510,prediction error,25,42,stealth,ocsvm
+runs_live/ieee9/stealth/run_20260326_195626,prediction error,30,42,stealth,ocsvm
+

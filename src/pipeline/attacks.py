@@ -1,6 +1,8 @@
 import numpy as np
 from typing import Tuple
 
+import pandapower as pp
+
 def standard_FDIA(z, attacked_indices, shift):
     """
     Non stealthy FDI attack: add a fixed shift to selected measurements.
@@ -16,32 +18,6 @@ def random_attack(z, attacked_indices, rng, scale):
     z_attack = z.copy()
     z_attack[attacked_indices] += rng.normal(0.0, scale, size=len(attacked_indices))
     return z_attack
-
-# # def stealth_FDIA(H: np.ndarray, z_clean: np.ndarray, attacked_indices: np.ndarray, percent: float, rng: np.random.Generator,):
-# def stealth_FDIA(H: np.ndarray, z_clean: np.ndarray, attacked_indices: np.ndarray, percent: float, c_direction: np.ndarray,):
-#     """
-#     Stealth attack: construct a = H c so that residual tests are (nearly) blind.
-
-#     c: chosen random direction in state space, scaled by alpha.
-#     a_full = H c: attack in measurement space.
-#     We then apply it only on attacked_indices.
-#     """
-
-#     a_full = H @ c_direction
-
-#     a = np.zeros_like(a_full)
-
-#     for idx in attacked_indices:
-#         base_mag = abs(z_clean[idx]) + 1e-6
-#         target_mag = percent * base_mag
-
-#         if abs(a_full[idx]) > 1e-8:
-#             scale = target_mag / abs(a_full[idx])
-#             a[idx] = a_full[idx] * scale
-#         else:
-#             a[idx] = 0.0
-
-#     return a
 
 def stealth_FDIA(
     H: np.ndarray,
@@ -67,73 +43,48 @@ def stealth_FDIA(
     a = alpha * a_dir
     return z_clean + a, a
 
-
 def make_bus_targeted_c(
     *,
     n_state: int,
     attack_buses: list[int],
     slack_bus: int,
     rng: np.random.Generator,
+    net=None,
 ) -> np.ndarray:
     """
-    Build c_direction where only targeted buses (excluding slack) have non-zero entries.
-    DC assumption: slack removed, so bus b -> state index (b-1) if slack is 0.
+    Build c_direction including targeted buses AND their neighbors.
+    This allows attack to propagate through electrical coupling.
     """
     c = np.zeros(n_state, dtype=float)
+    
+    # Start with target buses
+    target_set = set(attack_buses)
+    
+    # ADD neighbor buses if network is provided
+    if net is not None:
+        neighbors = set()
+        for b in attack_buses:
+            for _, line in net.line.iterrows():
+                if int(line.from_bus) == b:
+                    neighbors.add(int(line.to_bus))
+                elif int(line.to_bus) == b:
+                    neighbors.add(int(line.from_bus))
+        target_set.update(neighbors)
 
-    for b in attack_buses:
+    # Now populate c with all target + neighbor buses
+    for b in target_set:
         if b == slack_bus:
-            continue  # never target slack
-        state_idx = b - 1  # slack=0 mapping
+            continue
+        state_idx = b - 1
         if 0 <= state_idx < n_state:
             c[state_idx] = rng.standard_normal()
 
-    # Fallback if user accidentally passes only slack bus
     if np.linalg.norm(c) < 1e-12:
-        # pick a random non-slack state
         idx = rng.integers(0, n_state)
         c[idx] = 1.0
 
     c /= (np.linalg.norm(c) + 1e-12)
     return c
-
-
-
-    # n = H.shape[1]
-
-    # #1) random direction in state space
-    # c = rng.standard_normal(n)
-    # c = c / np.linalg.norm(c)
-    # a_full = H @ c
-
-    # #2) Scale relative to measurement magnitude (10-15%)
-    # a = np.zeros_like(a_full)
-    # for idx in attacked_indices:
-    #     base_mag = abs(z_clean[idx]) + 1e-6  # avoid zero scaling
-    #     target_mag = percent * base_mag
-
-    #     # scale stealth vector entry to bounded magnitude
-    #     if abs(a_full[idx]) > 1e-8:
-    #         scale = target_mag / abs(a_full[idx])
-    #         a[idx] = a_full[idx] * scale
-    #     else:
-    #         a[idx] = 0.0
-
-    # return a
-
-    # n = H.shape[1]
-
-    # # Random direction in state space
-    # c = rng.standard_normal(n)
-    # c = c / np.linalg.norm(c)
-    # c = alpha * c
-
-    # a_full = H @ c
-
-    # a = np.zeros_like(a_full)
-    # a[attacked_indices] = a_full[attacked_indices]
-
-    # return a
 
 def raised_cosine_envelope(t: int, start: int, end: int) -> float:
     """
