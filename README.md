@@ -44,7 +44,7 @@ python -m scripts.run_live_ieee9 \
   --detector_type ocsvm \
   --representation state \
   --window_size 5 \
-  --detector_dir trained_detectors_streaming_final \
+  --detector_dir trained_detectors \
   --enable_mitigation \
   --enable_control \
   --control_on_alarm \
@@ -58,7 +58,7 @@ python -m scripts.run_live_ieee9 \
 src/                        Core implementation of the framework
 scripts/                    Entry points for running simulations and evaluations
 tests/                      Unit, Integration, Reproduciblity tests
-trained_detectors           Final trained models
+trained_detectors/          Final trained models
 runs_live/                  Simulation outputs
 experiments/                Scripts used to generate evaluation results and figures
 plots/                      Dissertation figures
