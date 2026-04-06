@@ -1,4 +1,4 @@
-# FDIA Detection and Mitigation
+# FDIA Detection and Mitigation Engine
 
 This project presents a cyber-physical framework for detecting and mitigating False Data Injection Attacks (FDIA) in power system state estimation.
 
